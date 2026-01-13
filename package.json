@@ -20,6 +20,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/utils": "^3.0.0",
+    "@hookform/resolvers": "^5.2.2",
     "axios": "^1.6.7",
     "better-sqlite3": "^12.6.0",
     "bullmq": "^5.0.0",
