@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\johnb\\\\MyFunSeller2\" /b /a)",
+      "Bash(test:*)",
+      "WebSearch",
+      "Bash(dir:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:*)",
+      "Bash(npm rebuild:*)",
+      "Bash(npm install:*)"
+    ]
+  }
+}
