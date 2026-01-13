@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Package, Plus, Search, Pencil, Trash2 } from 'lucide-react';
-import type { Item } from '../../../shared/types';
+import type { Item, Image } from '../../../shared/types';
 import { Modal } from '../components/ui/Modal';
 import { ItemForm } from '../components/forms/ItemForm';
 import type { ItemFormData } from '../lib/validations/item.schema';
 import type { UploadedImage } from '../components/forms/ImageUploader';
 
+interface ItemWithImage extends Item {
+  primaryImage?: Image;
+}
+
 export function Items(): JSX.Element {
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<ItemWithImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -21,7 +25,24 @@ export function Items(): JSX.Element {
   const loadItems = async () => {
     try {
       const allItems = await window.api.items.findAll();
-      setItems(allItems);
+
+      // Load primary image for each item
+      const itemsWithImages = await Promise.all(
+        allItems.map(async (item) => {
+          if (item.id) {
+            try {
+              const primaryImage = await window.api.images.getPrimary(item.id);
+              return { ...item, primaryImage };
+            } catch (error) {
+              // No primary image found, that's okay
+              return item;
+            }
+          }
+          return item;
+        })
+      );
+
+      setItems(itemsWithImages);
     } catch (error) {
       console.error('Failed to load items:', error);
     } finally {
@@ -235,22 +256,38 @@ export function Items(): JSX.Element {
               key={item.id}
               className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
             >
-              {/* Image Placeholder */}
-              <div className="aspect-square bg-muted flex items-center justify-center relative">
-                <Package className="w-12 h-12 text-muted-foreground" />
+              {/* Item Image */}
+              <div className="aspect-square bg-muted flex items-center justify-center relative overflow-hidden">
+                {item.primaryImage?.processed_path || item.primaryImage?.original_path ? (
+                  <img
+                    src={`file:///${(item.primaryImage.processed_path || item.primaryImage.original_path).replace(/\\/g, '/')}`}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to placeholder if image fails to load
+                      console.error('Failed to load image:', item.primaryImage);
+                      e.currentTarget.style.display = 'none';
+                      const placeholder = e.currentTarget.parentElement?.querySelector('.package-icon');
+                      if (placeholder) placeholder.classList.remove('hidden');
+                    }}
+                  />
+                ) : null}
+                <Package
+                  className={`package-icon w-12 h-12 text-muted-foreground ${item.primaryImage ? 'hidden' : ''}`}
+                />
 
                 {/* Action Buttons (shown on hover) */}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
                   <button
                     onClick={() => openEditForm(item)}
-                    className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                    className="p-2 bg-white/90 backdrop-blur-sm text-gray-900 rounded-lg hover:bg-white transition-colors shadow-md"
                     title="Edit item"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => item.id && handleDeleteItem(item.id)}
-                    className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                    className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-md"
                     title="Delete item"
                   >
                     <Trash2 className="w-4 h-4" />
