@@ -1,8 +1,14 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { initializeDatabase } from './database';
 import { getImageProcessor } from './services';
+import { registerItemsHandlers } from './ipc/handlers/items.handler';
+import { registerImagesHandlers } from './ipc/handlers/images.handler';
+import { registerListingsHandlers } from './ipc/handlers/listings.handler';
+import { registerPlatformsHandlers } from './ipc/handlers/platforms.handler';
+import { registerTemplatesHandlers } from './ipc/handlers/templates.handler';
+import { IPC_CHANNELS } from './ipc/events';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -48,6 +54,24 @@ app.whenReady().then(() => {
   try {
     initializeDatabase();
     console.log('Database initialized successfully');
+
+    // Register IPC handlers
+    registerItemsHandlers();
+    registerImagesHandlers();
+    registerListingsHandlers();
+    registerPlatformsHandlers();
+    registerTemplatesHandlers();
+
+    // Register system handlers
+    ipcMain.handle(IPC_CHANNELS.SYSTEM_GET_APP_VERSION, () => app.getVersion());
+    ipcMain.handle(IPC_CHANNELS.SYSTEM_GET_PATHS, () => ({
+      userData: app.getPath('userData'),
+      documents: app.getPath('documents'),
+      downloads: app.getPath('downloads'),
+      pictures: app.getPath('pictures'),
+    }));
+
+    console.log('IPC handlers registered successfully');
   } catch (error) {
     console.error('Failed to initialize database:', error);
   }
