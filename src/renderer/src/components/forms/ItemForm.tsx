@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X } from 'lucide-react';
 import { Input, Textarea, Select } from '../ui/FormField';
+import { ImageUploader, type UploadedImage } from './ImageUploader';
 import {
   itemSchema,
   type ItemFormData,
@@ -13,12 +14,14 @@ import type { Item } from '../../../../shared/types';
 
 interface ItemFormProps {
   item?: Item;
-  onSubmit: (data: ItemFormData) => void | Promise<void>;
+  onSubmit: (data: ItemFormData, images: UploadedImage[]) => void | Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
 }
 
 export function ItemForm({ item, onSubmit, onCancel, isLoading }: ItemFormProps) {
+  const [images, setImages] = useState<UploadedImage[]>([]);
+
   const {
     register,
     handleSubmit,
@@ -71,7 +74,7 @@ export function ItemForm({ item, onSubmit, onCancel, isLoading }: ItemFormProps)
 
   const handleFormSubmit = async (data: ItemFormData) => {
     try {
-      await onSubmit(data);
+      await onSubmit(data, images);
     } catch (error) {
       console.error('Form submission error:', error);
     }
@@ -218,6 +221,18 @@ export function ItemForm({ item, onSubmit, onCancel, isLoading }: ItemFormProps)
               error={errors.weight}
             />
           </div>
+        </div>
+
+        {/* Images */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-4">Images</h3>
+          <ImageUploader
+            images={images}
+            onImagesChange={setImages}
+            maxFiles={10}
+            maxSizeMB={5}
+            disabled={isSubmitting || isLoading}
+          />
         </div>
       </div>
 

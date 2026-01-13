@@ -4,6 +4,7 @@ import type { Item } from '../../../shared/types';
 import { Modal } from '../components/ui/Modal';
 import { ItemForm } from '../components/forms/ItemForm';
 import type { ItemFormData } from '../lib/validations/item.schema';
+import type { UploadedImage } from '../components/forms/ImageUploader';
 
 export function Items(): JSX.Element {
   const [items, setItems] = useState<Item[]>([]);
@@ -28,10 +29,11 @@ export function Items(): JSX.Element {
     }
   };
 
-  const handleCreateItem = async (data: ItemFormData) => {
+  const handleCreateItem = async (data: ItemFormData, images: UploadedImage[]) => {
     setIsSubmitting(true);
     try {
-      await window.api.items.create({
+      // Create the item first
+      const createdItem = await window.api.items.create({
         ...data,
         // Convert empty strings to undefined
         description: data.description || undefined,
@@ -42,6 +44,34 @@ export function Items(): JSX.Element {
         cost: data.cost || undefined,
         weight: data.weight || undefined,
       });
+
+      // If there are images, process and save them
+      if (images.length > 0 && createdItem.id) {
+        for (let i = 0; i < images.length; i++) {
+          const img = images[i];
+          if (img.file) {
+            try {
+              // Save original image
+              const savedPath = await window.api.imageProcessor.saveOriginal(img.file.path);
+
+              // Create image record in database
+              await window.api.images.create({
+                item_id: createdItem.id,
+                original_path: savedPath,
+                file_name: img.name,
+                file_size: img.size,
+                display_order: i,
+                is_primary: img.isPrimary,
+                processing_status: 'pending',
+              });
+            } catch (imageError) {
+              console.error('Failed to save image:', imageError);
+              // Continue with other images even if one fails
+            }
+          }
+        }
+      }
+
       await loadItems();
       setIsFormOpen(false);
       setEditingItem(undefined);
@@ -53,7 +83,7 @@ export function Items(): JSX.Element {
     }
   };
 
-  const handleUpdateItem = async (data: ItemFormData) => {
+  const handleUpdateItem = async (data: ItemFormData, images: UploadedImage[]) => {
     if (!editingItem?.id) return;
 
     setIsSubmitting(true);
@@ -68,6 +98,32 @@ export function Items(): JSX.Element {
         cost: data.cost || undefined,
         weight: data.weight || undefined,
       });
+
+      // Handle new images (only process images with files)
+      const newImages = images.filter(img => img.file);
+      if (newImages.length > 0) {
+        for (let i = 0; i < newImages.length; i++) {
+          const img = newImages[i];
+          if (img.file) {
+            try {
+              const savedPath = await window.api.imageProcessor.saveOriginal(img.file.path);
+
+              await window.api.images.create({
+                item_id: editingItem.id,
+                original_path: savedPath,
+                file_name: img.name,
+                file_size: img.size,
+                display_order: i,
+                is_primary: img.isPrimary,
+                processing_status: 'pending',
+              });
+            } catch (imageError) {
+              console.error('Failed to save image:', imageError);
+            }
+          }
+        }
+      }
+
       await loadItems();
       setIsFormOpen(false);
       setEditingItem(undefined);
