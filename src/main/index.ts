@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
+import { config } from 'dotenv';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { initializeDatabase } from './database';
 import { getImageProcessor } from './services';
@@ -8,7 +9,11 @@ import { registerImagesHandlers } from './ipc/handlers/images.handler';
 import { registerListingsHandlers } from './ipc/handlers/listings.handler';
 import { registerPlatformsHandlers } from './ipc/handlers/platforms.handler';
 import { registerTemplatesHandlers } from './ipc/handlers/templates.handler';
+import { registerClaudeHandlers } from './ipc/handlers/claude.handler';
 import { IPC_CHANNELS } from './ipc/events';
+
+// Load environment variables
+config();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -61,6 +66,7 @@ app.whenReady().then(() => {
     registerListingsHandlers();
     registerPlatformsHandlers();
     registerTemplatesHandlers();
+    registerClaudeHandlers();
 
     // Register system handlers
     ipcMain.handle(IPC_CHANNELS.SYSTEM_GET_APP_VERSION, () => app.getVersion());

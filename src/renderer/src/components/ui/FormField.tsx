@@ -10,6 +10,7 @@ interface InputProps {
   error?: FieldError;
   required?: boolean;
   className?: string;
+  step?: string;
 }
 
 export function Input({
@@ -21,6 +22,7 @@ export function Input({
   error,
   required,
   className = '',
+  step,
 }: InputProps) {
   return (
     <div className={className}>
@@ -32,6 +34,7 @@ export function Input({
         id={name}
         type={type}
         placeholder={placeholder}
+        step={step}
         {...register(name, { valueAsNumber: type === 'number' })}
         className={`w-full px-3 py-2 bg-background border ${
           error ? 'border-red-500' : 'border-border'

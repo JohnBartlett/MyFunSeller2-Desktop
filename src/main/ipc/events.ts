@@ -89,6 +89,10 @@ export const IPC_CHANNELS = {
   // System
   SYSTEM_GET_APP_VERSION: 'system:getAppVersion',
   SYSTEM_GET_PATHS: 'system:getPaths',
+
+  // Claude AI
+  CLAUDE_ANALYZE_IMAGES: 'claude:analyzeImages',
+  CLAUDE_IS_CONFIGURED: 'claude:isConfigured',
 } as const;
 
 // Type for IPC channel names

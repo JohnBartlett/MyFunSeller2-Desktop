@@ -106,12 +106,20 @@ const api = {
     deleteOriginal: (fileName: string) => ipcRenderer.invoke(IPC_CHANNELS.IMAGE_DELETE_ORIGINAL, fileName),
     cleanupOld: (days: number) => ipcRenderer.invoke(IPC_CHANNELS.IMAGE_CLEANUP_OLD, days),
     getStorageStats: () => ipcRenderer.invoke(IPC_CHANNELS.IMAGE_GET_STORAGE_STATS),
+    convertHeicForPreview: (filePath: string) => ipcRenderer.invoke('IMAGE_CONVERT_HEIC_FOR_PREVIEW', filePath),
+    loadForDisplay: (filePath: string) => ipcRenderer.invoke('IMAGE_LOAD_FOR_DISPLAY', filePath),
   },
 
   // System API
   system: {
     getAppVersion: () => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_GET_APP_VERSION),
     getPaths: () => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_GET_PATHS),
+  },
+
+  // Claude AI API
+  claude: {
+    analyzeImages: (imagePaths: string[], userCorrections?: any) => ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_ANALYZE_IMAGES, imagePaths, userCorrections),
+    isConfigured: () => ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_IS_CONFIGURED),
   },
 };
 

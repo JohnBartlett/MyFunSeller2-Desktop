@@ -1,6 +1,6 @@
 {
   "name": "myfunseller2",
-  "version": "0.70.0",
+  "version": "1.0.0",
   "description": "Multi-platform resale posting application",
   "main": "out/main/index.js",
   "author": "John B",
@@ -18,6 +18,7 @@
     "package:win": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/utils": "^3.0.0",
     "@hookform/resolvers": "^5.2.2",
@@ -27,6 +28,8 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.0",
+    "dotenv": "^17.2.3",
+    "heic-convert": "^2.1.0",
     "ioredis": "^5.3.0",
     "lucide-react": "^0.562.0",
     "playwright": "^1.42.0",
@@ -36,6 +39,7 @@
     "react-hook-form": "^7.50.0",
     "react-router-dom": "^6.22.0",
     "sharp": "^0.33.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^2.2.0",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",

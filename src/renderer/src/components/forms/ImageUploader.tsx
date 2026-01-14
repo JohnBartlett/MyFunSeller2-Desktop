@@ -31,22 +31,104 @@ export function ImageUploader({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
+    async (acceptedFiles: File[]) => {
+      console.log('🔵 onDrop called with', acceptedFiles.length, 'files');
       const remainingSlots = maxFiles - images.length;
       const filesToAdd = acceptedFiles.slice(0, remainingSlots);
+      console.log('🔵 Will process', filesToAdd.length, 'files (remaining slots:', remainingSlots, ')');
 
-      const newImages: UploadedImage[] = filesToAdd.map((file, index) => ({
-        id: `${Date.now()}-${index}`,
-        file,
-        preview: URL.createObjectURL(file),
-        isPrimary: images.length === 0 && index === 0, // First image is primary
-        name: file.name,
-        size: file.size,
-        processing: false,
-        processed: false,
-      }));
+      const newImages: UploadedImage[] = [];
 
+      for (let index = 0; index < filesToAdd.length; index++) {
+        const file = filesToAdd[index];
+        console.log(`🔵 Processing file ${index + 1}/${filesToAdd.length}`);
+
+        const fileWithPath = file as File & { path?: string };
+
+        // Log file info for debugging
+        console.log('🔵 Dropped file:', {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          hasPath: !!(file as any).path,
+          path: (file as any).path,
+        });
+
+        // Create a new File object with path property if not present
+        if (!fileWithPath.path && (file as any).path) {
+          fileWithPath.path = (file as any).path;
+        }
+
+        // Wrap everything in a try-catch
+        try {
+          // For HEIC files, convert to JPEG in main process (browsers can't display HEIC)
+          let preview: string;
+          const fileName = file.name.toLowerCase();
+          if (fileName.endsWith('.heic') || fileName.endsWith('.heif')) {
+            console.log('🔵 HEIC file detected, converting to JPEG for preview...');
+            const filePath = (fileWithPath as any).path;
+            if (!filePath) {
+              throw new Error('No file path available for HEIC conversion');
+            }
+            const response: any = await window.api.imageProcessor.convertHeicForPreview(filePath);
+            if (!response.success) {
+              throw new Error(response.error || 'HEIC conversion failed');
+            }
+            preview = response.data;
+            console.log('✅ HEIC converted to JPEG! Preview length:', preview.length, 'chars');
+            console.log('✅ Preview starts with:', preview.substring(0, 50));
+          } else {
+            // For non-HEIC files, use FileReader
+            console.log('🔵 Starting FileReader for', file.name);
+            preview = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const result = e.target?.result as string;
+                console.log('✅ FileReader success! Preview length:', result?.length, 'chars');
+                console.log('✅ Preview starts with:', result?.substring(0, 50));
+                resolve(result);
+              };
+              reader.onerror = (e) => {
+                console.error('❌ FileReader error:', e);
+                reject(e);
+              };
+              reader.onprogress = (e) => {
+                console.log('📊 FileReader progress:', e.loaded, '/', e.total);
+              };
+              reader.readAsDataURL(file);
+            });
+          }
+
+          const newImage = {
+            id: `${Date.now()}-${index}`,
+            file: fileWithPath,
+            preview,
+            isPrimary: images.length === 0 && index === 0, // First image is primary
+            name: file.name,
+            size: file.size,
+            processing: false,
+            processed: false,
+          };
+
+          console.log('✅ Created image object:', {
+            id: newImage.id,
+            name: newImage.name,
+            previewLength: newImage.preview.length,
+            isPrimary: newImage.isPrimary,
+            hasFile: !!newImage.file,
+            filePath: (newImage.file as any)?.path,
+          });
+
+          newImages.push(newImage);
+        } catch (error) {
+          console.error('❌ Failed to read file:', error);
+        }
+      }
+
+      console.log('🔵 Total new images created:', newImages.length);
+      console.log('🔵 Calling onImagesChange with', [...images, ...newImages].length, 'total images');
       onImagesChange([...images, ...newImages]);
+      console.log('✅ onDrop complete');
     },
     [images, maxFiles, onImagesChange]
   );
@@ -54,7 +136,7 @@ export function ImageUploader({
   const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.heif'],
     },
     maxSize: maxSizeMB * 1024 * 1024,
     maxFiles: maxFiles - images.length,

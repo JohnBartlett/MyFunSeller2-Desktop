@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Package, Plus, Search, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import type { Item, Image } from '../../../shared/types';
 import { Modal } from '../components/ui/Modal';
 import { ItemForm } from '../components/forms/ItemForm';
 import type { ItemFormData } from '../lib/validations/item.schema';
 import type { UploadedImage } from '../components/forms/ImageUploader';
+import { showSuccess, showError, showConfirm } from '../lib/toast';
 
 interface ItemWithImage extends Item {
   primaryImage?: Image;
 }
 
 export function Items(): JSX.Element {
+  const navigate = useNavigate();
   const [items, setItems] = useState<ItemWithImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,17 +27,53 @@ export function Items(): JSX.Element {
 
   const loadItems = async () => {
     try {
-      const allItems = await window.api.items.findAll();
+      setLoading(true);
+      console.log('Loading items...');
+
+      const response: any = await window.api.items.findAll();
+      console.log('Items response:', response);
+
+      const allItems = response.success ? response.data : [];
+      console.log('All items:', allItems);
+
+      // Debug: Check ALL images for each item
+      for (const item of allItems) {
+        if (item.id) {
+          const allImagesResponse: any = await window.api.images.findByItemId(item.id);
+          console.log(`ALL images for item ${item.id}:`, allImagesResponse);
+        }
+      }
 
       // Load primary image for each item
       const itemsWithImages = await Promise.all(
-        allItems.map(async (item) => {
+        allItems.map(async (item: any) => {
           if (item.id) {
             try {
-              const primaryImage = await window.api.images.getPrimary(item.id);
+              const imageResponse: any = await window.api.images.getPrimary(item.id);
+              console.log(`Primary image for item ${item.id}:`, imageResponse);
+              const primaryImage = imageResponse.success ? imageResponse.data : undefined;
+
+              // If we have a primary image, load it as a data URL for display
+              if (primaryImage) {
+                try {
+                  const imagePath = primaryImage.processed_path || primaryImage.original_path;
+                  console.log(`Loading image for display from: ${imagePath}`);
+                  const dataUrlResponse: any = await window.api.imageProcessor.loadForDisplay(imagePath);
+                  if (dataUrlResponse.success) {
+                    primaryImage.dataUrl = dataUrlResponse.data;
+                    console.log(`Loaded data URL for item ${item.id}, length: ${dataUrlResponse.data.length}`);
+                  } else {
+                    console.error(`Failed to load data URL for item ${item.id}:`, dataUrlResponse.error);
+                  }
+                } catch (error) {
+                  console.error(`Error loading image for item ${item.id}:`, error);
+                }
+              }
+
               return { ...item, primaryImage };
             } catch (error) {
               // No primary image found, that's okay
+              console.log(`No primary image for item ${item.id}`);
               return item;
             }
           }
@@ -42,9 +81,11 @@ export function Items(): JSX.Element {
         })
       );
 
+      console.log('Items with images:', itemsWithImages);
       setItems(itemsWithImages);
     } catch (error) {
       console.error('Failed to load items:', error);
+      showError('Failed to load items. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -54,7 +95,7 @@ export function Items(): JSX.Element {
     setIsSubmitting(true);
     try {
       // Create the item first
-      const createdItem = await window.api.items.create({
+      const response: any = await window.api.items.create({
         ...data,
         // Convert empty strings to undefined
         description: data.description || undefined,
@@ -66,17 +107,43 @@ export function Items(): JSX.Element {
         weight: data.weight || undefined,
       });
 
+      const createdItem = response.success ? response.data : response;
+      console.log('Created item response:', response);
+      console.log('Created item:', createdItem);
+      console.log('Created item ID:', createdItem.id);
+      console.log('Images to process:', images.length);
+      console.log('Condition check: images.length > 0 =', images.length > 0, ', createdItem.id =', createdItem.id);
+
       // If there are images, process and save them
       if (images.length > 0 && createdItem.id) {
         for (let i = 0; i < images.length; i++) {
           const img = images[i];
+          console.log('Processing image:', {
+            name: img.name,
+            hasFile: !!img.file,
+            filePath: img.file?.path || (img.file as any)?.path,
+            isPrimary: img.isPrimary
+          });
+
           if (img.file) {
             try {
+              // Get the file path - Electron adds a path property to File objects
+              const filePath = (img.file as any).path || img.file.path;
+              if (!filePath) {
+                console.error('No file path found for image:', img.name);
+                continue;
+              }
+
+              console.log('Saving image with path:', filePath);
+
               // Save original image
-              const savedPath = await window.api.imageProcessor.saveOriginal(img.file.path);
+              const savedPathResponse: any = await window.api.imageProcessor.saveOriginal(filePath);
+              const savedPath = savedPathResponse.success ? savedPathResponse.data : savedPathResponse;
+              console.log('Image saved response:', savedPathResponse);
+              console.log('Image saved to path:', savedPath);
 
               // Create image record in database
-              await window.api.images.create({
+              const createImageResponse: any = await window.api.images.create({
                 item_id: createdItem.id,
                 original_path: savedPath,
                 file_name: img.name,
@@ -85,20 +152,27 @@ export function Items(): JSX.Element {
                 is_primary: img.isPrimary,
                 processing_status: 'pending',
               });
+              console.log('Image record created response:', createImageResponse);
+              console.log('Image record ID:', createImageResponse.success ? createImageResponse.data?.id : 'FAILED');
             } catch (imageError) {
               console.error('Failed to save image:', imageError);
               // Continue with other images even if one fails
             }
+          } else {
+            console.log('Skipping image (no file):', img.name);
           }
         }
+      } else {
+        console.log('No images to process or no item ID');
       }
 
       await loadItems();
       setIsFormOpen(false);
       setEditingItem(undefined);
+      showSuccess('Item created successfully!');
     } catch (error) {
       console.error('Failed to create item:', error);
-      alert('Failed to create item. Please try again.');
+      showError('Failed to create item. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -127,7 +201,9 @@ export function Items(): JSX.Element {
           const img = newImages[i];
           if (img.file) {
             try {
-              const savedPath = await window.api.imageProcessor.saveOriginal(img.file.path);
+              const filePath = (img.file as any).path || img.file.path;
+              const savedPathResponse: any = await window.api.imageProcessor.saveOriginal(filePath);
+              const savedPath = savedPathResponse.success ? savedPathResponse.data : savedPathResponse;
 
               await window.api.images.create({
                 item_id: editingItem.id,
@@ -148,23 +224,34 @@ export function Items(): JSX.Element {
       await loadItems();
       setIsFormOpen(false);
       setEditingItem(undefined);
+      showSuccess('Item updated successfully!');
     } catch (error) {
       console.error('Failed to update item:', error);
-      alert('Failed to update item. Please try again.');
+      showError('Failed to update item. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteItem = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this item?')) return;
+    const confirmed = await showConfirm(
+      'Are you sure you want to delete this item?',
+      {
+        description: 'This action cannot be undone.',
+        confirmText: 'Delete',
+        cancelText: 'Cancel'
+      }
+    );
+
+    if (!confirmed) return;
 
     try {
       await window.api.items.delete(id);
       await loadItems();
+      showSuccess('Item deleted successfully!');
     } catch (error) {
       console.error('Failed to delete item:', error);
-      alert('Failed to delete item. Please try again.');
+      showError('Failed to delete item. Please try again.');
     }
   };
 
@@ -199,13 +286,24 @@ export function Items(): JSX.Element {
             Manage your inventory items
           </p>
         </div>
-        <button
-          onClick={openCreateForm}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Add Item</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => loadItems()}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-foreground rounded-lg hover:bg-accent/80 transition-colors font-medium disabled:opacity-50"
+            title="Refresh items"
+          >
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+          <button
+            onClick={openCreateForm}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add Item</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -254,13 +352,14 @@ export function Items(): JSX.Element {
           {filteredItems.map((item) => (
             <div
               key={item.id}
-              className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group"
+              onClick={() => item.id && navigate(`/items/${item.id}`)}
+              className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-shadow group cursor-pointer"
             >
               {/* Item Image */}
               <div className="aspect-square bg-muted flex items-center justify-center relative overflow-hidden">
-                {item.primaryImage?.processed_path || item.primaryImage?.original_path ? (
+                {item.primaryImage?.dataUrl ? (
                   <img
-                    src={`file:///${(item.primaryImage.processed_path || item.primaryImage.original_path).replace(/\\/g, '/')}`}
+                    src={item.primaryImage.dataUrl}
                     alt={item.title}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -273,20 +372,26 @@ export function Items(): JSX.Element {
                   />
                 ) : null}
                 <Package
-                  className={`package-icon w-12 h-12 text-muted-foreground ${item.primaryImage ? 'hidden' : ''}`}
+                  className={`package-icon w-12 h-12 text-muted-foreground ${item.primaryImage?.dataUrl ? 'hidden' : ''}`}
                 />
 
                 {/* Action Buttons (shown on hover) */}
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
                   <button
-                    onClick={() => openEditForm(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditForm(item);
+                    }}
                     className="p-2 bg-white/90 backdrop-blur-sm text-gray-900 rounded-lg hover:bg-white transition-colors shadow-md"
                     title="Edit item"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => item.id && handleDeleteItem(item.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      item.id && handleDeleteItem(item.id);
+                    }}
                     className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-md"
                     title="Delete item"
                   >

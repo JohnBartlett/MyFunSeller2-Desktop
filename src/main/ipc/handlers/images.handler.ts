@@ -258,5 +258,86 @@ export function registerImagesHandlers(): void {
     }
   );
 
+  // Convert HEIC to JPEG for preview
+  ipcMain.handle(
+    'IMAGE_CONVERT_HEIC_FOR_PREVIEW',
+    async (_, filePath: string): Promise<ApiResponse<string>> => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const heicConvert = require('heic-convert');
+
+        console.log('Converting HEIC to JPEG for preview:', filePath);
+
+        const ext = path.extname(filePath).toLowerCase();
+        if (ext !== '.heic' && ext !== '.heif') {
+          return { success: false, error: 'Not a HEIC file' };
+        }
+
+        const heicBuffer = fs.readFileSync(filePath);
+        const outputBuffer = await heicConvert({
+          buffer: heicBuffer,
+          format: 'JPEG',
+          quality: 0.8, // Lower quality for preview
+        });
+
+        const jpegBase64 = Buffer.from(outputBuffer).toString('base64');
+        const dataUrl = `data:image/jpeg;base64,${jpegBase64}`;
+
+        console.log('HEIC converted to JPEG preview, size:', dataUrl.length);
+        return { success: true, data: dataUrl };
+      } catch (error) {
+        console.error('Failed to convert HEIC for preview:', error);
+        return { success: false, error: error.message };
+      }
+    }
+  );
+
+  // Load image as data URL for display (handles HEIC conversion)
+  ipcMain.handle(
+    'IMAGE_LOAD_FOR_DISPLAY',
+    async (_, filePath: string): Promise<ApiResponse<string>> => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const heicConvert = require('heic-convert');
+
+        if (!fs.existsSync(filePath)) {
+          return { success: false, error: 'File not found' };
+        }
+
+        const ext = path.extname(filePath).toLowerCase();
+
+        if (ext === '.heic' || ext === '.heif') {
+          // Convert HEIC to JPEG
+          const heicBuffer = fs.readFileSync(filePath);
+          const outputBuffer = await heicConvert({
+            buffer: heicBuffer,
+            format: 'JPEG',
+            quality: 0.6, // Lower quality for thumbnails
+          });
+          const jpegBase64 = Buffer.from(outputBuffer).toString('base64');
+          return { success: true, data: `data:image/jpeg;base64,${jpegBase64}` };
+        } else {
+          // For other formats, just convert to base64
+          const imageBuffer = fs.readFileSync(filePath);
+          const mimeTypes: any = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+          };
+          const mimeType = mimeTypes[ext] || 'image/jpeg';
+          const base64 = imageBuffer.toString('base64');
+          return { success: true, data: `data:${mimeType};base64,${base64}` };
+        }
+      } catch (error) {
+        console.error('Failed to load image for display:', error);
+        return { success: false, error: error.message };
+      }
+    }
+  );
+
   console.log('Images IPC handlers registered');
 }

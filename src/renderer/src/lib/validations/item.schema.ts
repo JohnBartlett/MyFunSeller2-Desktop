@@ -10,12 +10,18 @@ export const itemSchema = z.object({
   price: z.number().min(0, 'Price must be greater than 0').or(z.string().transform((val) => parseFloat(val))),
   currency: z.string().default('USD'),
   quantity: z.number().int().min(1, 'Quantity must be at least 1').default(1).or(z.string().transform((val) => parseInt(val))),
-  cost: z.number().min(0).optional().or(z.string().transform((val) => val ? parseFloat(val) : undefined)),
+  cost: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null || (typeof val === 'number' && isNaN(val)) ? undefined : val),
+    z.number().min(0).optional()
+  ),
   sku: z.string().optional(),
   brand: z.string().optional(),
   size: z.string().optional(),
   color: z.string().optional(),
-  weight: z.number().min(0).optional().or(z.string().transform((val) => val ? parseFloat(val) : undefined)),
+  weight: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null || (typeof val === 'number' && isNaN(val)) ? undefined : val),
+    z.number().min(0).optional()
+  ),
   dimensions: z.object({
     length: z.number().min(0),
     width: z.number().min(0),
